@@ -68,6 +68,8 @@ flutter:
   assets:
     - assets/labels.txt
     - assets/plant_diseas_model.tflite
+    - assets/android_tomato.tflite
+    - assets/main_labels.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

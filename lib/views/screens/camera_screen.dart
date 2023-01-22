@@ -50,6 +50,8 @@ class _CameraScreenState extends State<CameraScreen>
   bool showFocusCircle = false;
   double x = 0;
   double y = 0;
+
+  String _model = 'general';
   final ImagePicker _picker = ImagePicker();
   late Future<void> _initializeController;
   //LightMode lightMode = LightMode.auto;
@@ -80,9 +82,9 @@ class _CameraScreenState extends State<CameraScreen>
         }
       }
     });
-    loadModel().then((value) {
-      print('Model loaded');
-    });
+    // loadModel().then((value) {
+    //   print('Model loaded');
+    // });
     //onNewCameraSelected(cameras[0]);
     currentFlashMode = FlashMode.off;
   }
@@ -126,7 +128,23 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  Future loadModel() async {
+  Future loadTomatoModel() async {
+    Tflite.close();
+    try {
+      String? res;
+      res = await Tflite.loadModel(
+        model: "assets/android_tomato.tflite",
+        labels: "assets/main_labels.txt",
+        // useGpuDelegate: true,
+      );
+
+      print(res);
+    } on PlatformException {
+      print('Failed to load model.');
+    }
+  }
+
+  Future loadGeneralModel() async {
     Tflite.close();
     try {
       String? res;
@@ -142,8 +160,28 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+  onSelect(model) async {
+    // load the model specified
+    if (model == 'general') {
+      await loadGeneralModel();
+      print('LOADED THE GENERAL MODEL');
+    } else {
+      await loadTomatoModel();
+      print('LOADED THE TOMATO MODEL');
+    }
+    setState(() {
+      _model = model;
+    });
+  }
+
   Future recognizeImage(XFile image) async {
     int startTime = new DateTime.now().millisecondsSinceEpoch;
+    int numResults;
+    if (_model == 'general') {
+      numResults = 38;
+    } else {
+      numResults = 10;
+    }
     var recognitions = await Tflite.runModelOnImage(
       path: image.path,
       numResults: 38,
@@ -156,6 +194,19 @@ class _CameraScreenState extends State<CameraScreen>
     });
     int endTime = new DateTime.now().millisecondsSinceEpoch;
     print("Inference took ${endTime - startTime}ms");
+  }
+
+  Future predict(XFile image) async {
+    // load the general model
+    onSelect('general');
+    // run prediction on the general model
+    await recognizeImage(image);
+    // check if its greater than the set threshold
+    print('CONFIDENCE OF THE GENERAL MODEL ${_recognitions[0]['confidence']}');
+    if (_recognitions[0]['confidence'] > CONFIDENCE_THRESHOLD) {
+      await onSelect('tomato');
+      await recognizeImage(image);
+    }
   }
 
   @override
@@ -250,7 +301,9 @@ class _CameraScreenState extends State<CameraScreen>
                                 // read file bytes
                                 var imgFileBytes = await imgFile.readAsBytes();
                                 //showLoaderDialog(context);
-                                await recognizeImage(imgFile);
+                                showLoaderDialog(context);
+                                await predict(imgFile);
+                                Navigator.pop(context);
                                 //Navigator.pop(context);
                                 var preventions = getPrevention(
                                     _recognitions[0]['label'],
@@ -300,9 +353,9 @@ class _CameraScreenState extends State<CameraScreen>
                               if (imgFile != null) {
                                 // run prediction on image
                                 var imgFileBytes = await imgFile.readAsBytes();
-                                //showLoaderDialog(context);
-                                await recognizeImage(imgFile);
-                                //Navigator.pop(context);
+                                showLoaderDialog(context);
+                                await predict(imgFile);
+                                Navigator.pop(context);
                                 var preventions = getPrevention(
                                     _recognitions[0]['label'],
                                     _recognitions[0]['confidence']);
@@ -395,8 +448,7 @@ class _CameraScreenState extends State<CameraScreen>
   getPrevention(String disease, double confidence) {
     print('DOES IT CONTAIN THE KEY ${DISEASE_PREVENTION.containsKey(disease)}');
 
-    if ((DISEASE_PREVENTION.containsKey(disease)) &&
-        (confidence > CONFIDENCE_THRESHOLD)) {
+    if ((confidence > CONFIDENCE_THRESHOLD)) {
       print('TEST PASSED');
       return DISEASE_PREVENTION[disease];
     } else {
